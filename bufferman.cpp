@@ -1,11 +1,9 @@
-#pragma warning( push )
-#pragma warning( disable : 4786 )
-
 /*! \file
     \brief holds main() function
 */
 
 #define PATH ""
+#define DEBUGMODE 0
 
 #include "database.hpp"
 #include "general.hpp"
@@ -66,9 +64,11 @@ int main(int argc, char * argv[])
       try
       {
         int reads = bm.read(fileNum, startRecord, endRecord, priority == -1 ? 10 : priority, startSector, endSector);
+#if debugmode
         cerr << "Reading " << setw(2) << fileNum << " " << setw(5) 
           << startRecord << " " << setw(5) << endRecord << " blocks ["
           << startSector << "," << endSector << "] " << reads << " fetches" << endl;
+#endif
         if (bm.readNumber % 1000 == 0) cout << bm.time << endl;
       }
       catch(...)
@@ -90,5 +90,3 @@ int main(int argc, char * argv[])
   }
   return 1;
 }
-
-#pragma warning( pop )
