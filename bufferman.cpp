@@ -18,11 +18,15 @@ using namespace std;
 
 int main(int argc, char * argv[])
 {
-  if (argc > 1)
+  if (argc > 2)
   {
-    cerr << "Usage: " << argv[0] << endl;
+    cerr << "Usage: " << argv[0] << " granularity" << endl;
     return 0;
   }
+  
+  int granularity(0);
+  
+  if (argc == 2) granularity = atoi(argv[1]);
 
   char * filename = "stdin";
 
@@ -64,12 +68,15 @@ int main(int argc, char * argv[])
       try
       {
         int reads = bm.read(fileNum, startRecord, endRecord, priority == -1 ? 10 : priority, startSector, endSector);
-#if debugmode
+#if DEBUGMODE
         cerr << "Reading " << setw(2) << fileNum << " " << setw(5) 
           << startRecord << " " << setw(5) << endRecord << " blocks ["
           << startSector << "," << endSector << "] " << reads << " fetches" << endl;
 #endif
-        if (bm.readNumber % 1000 == 0) cout << bm.time << endl;
+        if (granularity > 0 && bm.readNumber % granularity == 0) 
+          cout << bm.time << endl;
+//          cout << bm.fetchNumber << endl;   
+          
       }
       catch(...)
       {
@@ -78,6 +85,7 @@ int main(int argc, char * argv[])
       }
     };
     cout << bm.time << endl;
+    cerr << "Total number of physical disk reads: " << bm.fetchNumber << endl;
     return 0;
   }
   catch(Exception e)
