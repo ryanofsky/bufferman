@@ -5,7 +5,7 @@
 #---------------------------------------------------------------------------
 PROJECT_NAME           = 
 PROJECT_NUMBER         = 
-OUTPUT_DIRECTORY       = r:/Documents/2002-02/2/Database/Project2/dox
+OUTPUT_DIRECTORY       = dox/
 OUTPUT_LANGUAGE        = English
 EXTRACT_ALL            = YES
 EXTRACT_PRIVATE        = NO
@@ -51,7 +51,7 @@ WARN_LOGFILE           =
 #---------------------------------------------------------------------------
 # configuration options related to the input files
 #---------------------------------------------------------------------------
-INPUT                  = R:/Documents/2002-02/2/Database/Project2/
+INPUT                  = .
 FILE_PATTERNS          = 
 RECURSIVE              = NO
 EXCLUDE                = 
