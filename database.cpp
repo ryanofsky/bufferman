@@ -22,6 +22,99 @@ using std::ostringstream;
 using std::cout;
 using std::setw;
 using std::for_each;
+using std::fill;
+
+void Relation::calc(Database & d)
+{
+  System & s = d.system;
+
+  // amount of space that the relation would use if its occupancy were 1.0
+  int packedRelationSize = divCeil(numRecords,
+    s.blockSize / recordSize);
+
+  relationSize = (int)rint(packedRelationSize / occupancy);
+}
+
+int Relation::recordsInBuf(System & s, double bufferFrac, int reserve)
+{
+  int bufferSize = (int) ((double)s.blockSize * (double)(s.numBlocks - reserve)
+    * bufferFrac);
+  int buffer = bufferSize / recordSize;
+  if (buffer <= 0)
+    THROW_STREAM("Fraction of buffer to use on scan of relation " << fileNum
+      << " is " << bufferFrac << ", which is not even big enough to hold a "
+      " single record.");
+  return buffer;
+}
+
+void Index::calc(Database & d)
+{
+  System & s = d.system;
+  Relation & r = d.relations[relationNum];
+
+  if (conceptualType == Index::PRIMARY && physicalType == Index::BPLUS)
+  {
+    numKeys = d.relations[relationNum].relationSize;
+  }
+  else
+  {
+    numKeys = r.numRecords;
+  }
+
+  if (physicalType == Index::HASH)
+  {
+    keysPerNode = s.blockSize / (keySize + pointerSize);
+    if (keysPerNode < 1)
+      THROW_STREAM("Key size or pointer size is too big in index " << fileNum 
+        << ". If a node can't hold at least one pointer and one key it is "
+        "impossible to have a hash table.");
+
+    // parameter not used for hash tables
+    keysPerLeafNode = -1;
+
+    // amount of space that the index would use if its occupancy were 1.0
+    int packedIndexSize = divCeil(numKeys, keysPerNode);
+
+    indexSize = (int)rint((double)packedIndexSize / occupancy);
+  }
+  else if (physicalType == Index::BPLUS)
+  {
+    // assuming sizeof(pointer to node) == sizeof(pointer to tuple)
+    //
+    // subtract pointerSize because in internal nodes there is an extra pointer
+    keysPerNode = (s.blockSize - pointerSize) / (keySize + pointerSize);
+    if ((double)(1 + keysPerNode) * occupancy < 2.0)
+      THROW_STREAM("Key size or pointer size is too big or occupancy is too small in index " << fileNum 
+        << ". If at least two pointers can't fit in a node, it is impossible to have "
+        "a tree.");
+
+    // subtract 2 * pointersize to make room for doubly linked list pointers
+    keysPerLeafNode = (s.blockSize - 2 * pointerSize) / (keySize + pointerSize);
+    if (keysPerNode < 1)
+      THROW_STREAM("Key size or pointer size is too big in index " << fileNum 
+        << ". If three pointers and a key can't fit in a node, it is "
+        "impossible to have a B+ tree leaf.");
+
+    int numChildren = (int)rint((double)divCeil(numKeys, keysPerLeafNode) / occupancy);
+      
+    treeLevels.push_back(numChildren);
+    indexSize = numChildren;
+
+    do
+    {
+      numChildren = (int)ceil((double)numChildren / (double) (keysPerNode+1) / occupancy);
+      treeLevels.push_back(numChildren);
+      indexSize += numChildren;   
+    }
+    while (numChildren > 1);
+
+    // using do-while instead of while because I'm assuming there must be at 
+    // least one non-leaf node even if all keys fit in one leaf
+    assert(treeLevels.size() > 1);
+  }
+  else
+    assert(false);
+}
 
 //! Specialized exception class for holding information about parse errors
 class ParseException : public Exception
@@ -112,7 +205,9 @@ Database::Database(char const * filename, System & system_)
     bool eof = !t.next();
     if (t.token == "relation")
     {
-      Relation r;
+      relations.resize(relations.size()+1);
+      Relation & r = relations.back();
+      
       r.fileNum = fileNum;
 
       eof = !t.next();
@@ -130,11 +225,13 @@ Database::Database(char const * filename, System & system_)
       if (r.occupancy <= 0 || r.occupancy > 1)
         throw ParseException(filename, t, "Expecting occupied fraction to be in (0,1]", __FILE__, __LINE__);
 
+      r.calc(*this);
       relations.push_back(r);
     }
     else if (t.token == "index")
     {
-      Index i;
+      indices.resize(indices.size()+1);
+      Index & i = indices.back();
       i.fileNum = fileNum;
       i.relationNum = relations.size() - 1;
 
@@ -172,7 +269,7 @@ Database::Database(char const * filename, System & system_)
       if (i.occupancy <= 0 || i.occupancy > 1)
         throw ParseException(filename, t, "Expecting occupied fraction to be in (0,1]", __FILE__, __LINE__);
 
-      indices.push_back(i);
+      i.calc(*this);
     }
     else
       throw ParseException(filename, t, "Expecting either 'relation' or 'index'", __FILE__, __LINE__);
@@ -236,7 +333,7 @@ Access::Access(char const * filename, Database & database_)
 
       eof = !t.next();
       scan->useBuffer = t.getDouble();
-      if (scan->useBuffer < 0 || scan->useBuffer > 1 || eof)
+      if (scan->useBuffer <= 0 || scan->useBuffer > 1 || eof)
         throw ParseException(filename, t, "Expecting fraction of buffer to use between 0 and 1", __FILE__, __LINE__);
     }
     else if (t.token == "lookup")
@@ -295,10 +392,10 @@ Access::Access(char const * filename, Database & database_)
       if (indexLoop->matches < 0 || eof)
         throw ParseException(filename, t, "Expecting average number of matches not less than zero", __FILE__, __LINE__);
 
-      Index const & in = i[indexLoop->relationNum];
+      Index const & in = i[indexLoop->indexNum];
 
       if (in.conceptualType == Index::PRIMARY && !equals(indexLoop->matches, 1.0))
-        WARN_STREAM("Index " << in.fileNum << "is a primary index, so you can "
+        WARN_STREAM("Index " << in.fileNum << " is a primary index, so you can "
           "not expect the average number of matches to be " << indexLoop->matches
           << ". This value will be ignored." << endl);
     }
@@ -314,13 +411,19 @@ Access::Access(char const * filename, Database & database_)
 
 void Access::simulateOperations(System & system)
 {
+  opCount.resize(operations.size());
+  fill(opCount.begin(), opCount.end(), 0);
   for (int i = 0; i < numOperations; ++i)
   {
     int r = RandomDiscrete(probs);
     assert(0 <= r && r < operations.size());
+    //
+    ++opCount[r];
     Operation & op = *operations[r];
     op(database);
   }
+  //for(int j = 0; j < opCount.size(); ++j)
+  //  cerr << "op " << j << " count = " << opCount[j] << endl;
 }
 
 Access::~Access()
