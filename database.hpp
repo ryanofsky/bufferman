@@ -18,7 +18,7 @@ public:
   //! block size in bytes
   int blockSize;
   
-  //! block transfer type in milliseconds
+  //! block transfer time in milliseconds
   double transferTime; 
   
   //! average rotational latency in millisecond
