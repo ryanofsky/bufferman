@@ -361,7 +361,9 @@ Access::Access(char const * filename, Database & database_)
       eof = !t.next();
       blockJoin->innerBuffer = t.getDouble();
       double total = blockJoin->innerBuffer + blockJoin->outerBuffer;
-      if (total < 0 || total > 1 || eof)
+      if (equals(total,1.0)) total = 1.0;
+      if (equals(total,0.0)) total = 0.0;
+      if (total < 0.0 || total > 1.0 || eof)
         throw ParseException(filename, t, "Expected inner buffer + outer buffer usage to be between 0 and 1", __FILE__, __LINE__);
     }
     else if (t.token == "indexloop")
