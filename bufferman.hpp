@@ -68,26 +68,44 @@ public:
 
   SectorMap mapped;
 
-  int getSector(int fileNum, int record)
+  //! map a file number and offset to a disk sector 
+  int getSector(int fileNum, int offset)
   {
     File & f = files[fileNum];
-    return files[fileNum].startingBlock + (record - 1)
+    return files[fileNum].startingBlock + (offset - 1)
       * f.numBlocks / f.numRecords;
   }
 
-  //! map from a priority number to the count of blocks that have that priority
-  map<int, int> priorities;
-  int lastSkipped;
+  //! number of the disk sector read last, used to detect
+  // consecutive reads
+  int lastSector;
+
+  //! read from a disk sector
+  int readSector(int sector)
+  {
+    if (sector == lastSector)
+    {
+      // xxx: what is rotational latency (why isn't it just a part of seekTime)
+      time += system.rotationLatency + seekTime;
+    } 
+    time += system.tranferTime;
+    lastSector = sector; 
+  }
+
   int lowestPriority;
 
   bool usePage(Bi page, int priority)
   {
     if (page->lastRead == readNumber)
     {
-      lastSkipped = lastPos;
       return false;
     }
-    return yourmom;
+    else if (page->priority >= priority)
+    {
+      lowerPagePriority(page); 
+      return false;
+    }
+    return true;
   }
 
   void lowerPagePriority(Bi page)
@@ -128,8 +146,8 @@ public:
     else
       assert(MIN_PRIORITY <= priority && priority <= MAX_PRIORITY);
 
-    int start = getSector(startRecord);
-    int end = getSector(endRecord + 1);
+    int start = getSector(fileNum, startRecord);
+    int end = getSector(fileNum, endRecord + 1);
 
     for(int r = start; r < end; ++r)
     {
