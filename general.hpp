@@ -35,6 +35,11 @@ bool inline equals(double a, double b)
 #define rint(x) floor((x) + 0.5)
 #endif
 
+//! Return a * b / c. Use when there is a chance a * b might silently overflow
+int inline mdiv(int a, int b, int c)
+{
+  return (int)((double)a * (double)b / (double)c);
+}
 
 //! Functor that deletes a pointer
 template<class T> struct DeletePointer : public unary_function<T, void>
