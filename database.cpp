@@ -37,9 +37,10 @@ void Relation::calc(Database & d)
 
 int Relation::recordsInBuf(System & s, double bufferFrac, int reserve)
 {
-  int bufferSize = (int) ((double)s.blockSize * (double)(s.numBlocks - reserve)
-    * bufferFrac);
-  int buffer = bufferSize / recordSize;
+  // buffer size to use (unit = 1 block)  
+  int bufferSize = (int) ((double)(s.numBlocks - reserve) * bufferFrac);
+  int buffer = bufferSize * numRecords / blockSize;
+
   if (buffer <= 0)
     THROW_STREAM("Fraction of buffer to use on scan of relation " << fileNum
       << " is " << bufferFrac << ", which is not even big enough to hold a "
