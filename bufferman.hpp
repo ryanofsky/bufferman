@@ -5,10 +5,9 @@
 #include <vector>
 #include <cassert>
 
-using std::vector;
-using std::map;
-using std::pair;
+using namespace std;
 
+//! Holds information about the position of a file on disk
 struct File
 {
   //! starts on this sector
@@ -20,37 +19,54 @@ struct File
   //! number of blocks in the file
   int numBlocks;
 
-  File() : startingBlock(-1), numRecords(0), numBlocks(0) {}
+  //! constructor
+  File(int startingBlock_, int numRecords_, int numBlocks_) : startingBlock(
+    startingBlock_), numRecords(numRecords_), numBlocks(numBlocks_) {}
+
+  //! default constructor
+  File()  : startingBlock(-1) {}
 };
 
+//! Holds information about one page (block) in the buffer
+struct BufferPage
+{
+  //! the sector number stored in this buffer page
+  int sector;
+
+  //! last time this page was read
+  int lastRead;
+
+  //! priority level of this page
+  int priority;
+  
+  //! default constructor
+  BufferPage() : sector(-1), priority(0) {}
+};
+
+typedef vector<BufferPage> Buffer;
+typedef Buffer::iterator BufferIterator;
+typedef map<int, BufferIterator> SectorMap;
+typedef SectorMap::iterator SectorIterator;
+typedef SectorMap::value_type SectorPair;
+
+//! Implements buffer management algorithm and measures disk accesses
 class BufferManager
 {
-private:
-
-  // define some types used internally
-  struct Page;
-  typedef vector<Page> Buffer;
-  typedef Buffer::iterator Bi;
-  typedef map<int, Bi> SectorMap;
-  typedef SectorMap::iterator Si;
-  typedef SectorMap::value_type Sp;
-  struct Page
-  {
-    Si si;
-    int priority;
-    int lastRead;
-  };
-
 public:
-
-  //! last sector read
-  int lastPos;
-
-  //! how many reads so far
+  //! how many reads so far (number of times BufferManager::read() called)
   int readNumber;
 
-  //! total time (in milliseconds)
-  int time;
+  //! number of blocks read from disk so far 
+  int fetchNumber;
+
+  //! sector number which was read from the disk most recently, used to detect consecutive reads
+  int lastSector;
+
+  //! total time in milliseconds of disk accesses so far
+  double time;  
+
+  //! next page of buffer to try to read into
+  int nextPage;
 
   //! vector of pages
   Buffer buffer;
@@ -58,79 +74,57 @@ public:
   //! map of sector addresses that are currently loaded in the buffer
   SectorMap mapped;  
 
+  //! System object
   System & system;
+
+  //! Databse object
   Database & database;
 
-  //! list of files indexed by file number
+  //! list of files in the database indexed by file number
   map<int, File> files;
 
+  //! constructor
   BufferManager(System & system_, Database & database_)
-    : system(system_), database(database_), lastPos(-1), readNumber(0), time(0)
+  : system(system_), database(database_), readNumber(0), fetchNumber(0),
+    lastSector(-1), time(0), nextPage(0)
   {
-  
+    buffer.resize(system.numBlocks);
+    int lastBlock(0);
+    
+    for(int a = 0; a < database.relations.size(); ++a)
+    {
+      Relation & r = database.relations[a];
+      files[r.fileNum] = File(lastBlock, r.numRecords, r.blockSize);
+      lastBlock +=r.blockSize;
+    }
+
+    for(int b = 0; b < database.indices.size(); ++b)
+    {
+      Index & i = database.indices[b];
+      files[i.fileNum] = File(lastBlock, i.blockSize, i.blockSize);
+      lastBlock += i.blockSize;
+    }
   }
-
-  enum { EMPTY = -1, MIN_PRIORITY = 0, MAX_PRIORITY = 99, 
-    DEFAULT_PRIORITY = 10 };
-
-  //! map a file number and offset to a disk sector 
-  int getSector(int fileNum, int offset)
-  {
-    File & f = files[fileNum];
-    if (f.startingBlock < 0)
-      THROW_STREAM("Invalid File number " << fileNum << endl);
-
-    return files[fileNum].startingBlock + (offset - 1)
-      * f.numBlocks / f.numRecords;
-  }
-
-  //! number of the disk sector read last, used to detect
-  // consecutive reads
-  int lastSector;
 
   //! read from a disk sector
-  int readSector(int sector)
+  void fetchSector(int sector)
   {
-    if (sector == lastSector)
-    {
-      // xxx: what is rotational latency (why isn't it just a part of seekTime)
+    ++fetchNumber;
+    if (sector == lastSector + 1)
       time += system.rotationalLatency + system.seekTime;
-    } 
     time += system.transferTime;
     lastSector = sector; 
   }
 
-  int lowestPriority;
-
-  bool usePage(Bi page, int priority)
-  {
-    if (page->lastRead == readNumber)
-    {
-      return false;
-    }
-    else if (page->priority >= priority)
-    {
-      lowerPagePriority(page); 
-      return false;
-    }
-    return true;
-  }
-
-  void lowerPagePriority(Bi page)
-  {
-    page->priority -= 10;
-  }
-
-
-  Bi getFreePage(int sector, int priority)
+  //! find the next low priority page to replace
+  BufferIterator getFreePage(int sector, int priority)
   {
     for(;;)
     {
-      ++lastPos;
-      lastPos = lastPos % buffer.size();
-
-      Bi page = buffer.begin() + lastPos;
-      if (usePage(page,priority))
+      BufferIterator page = buffer.begin() + nextPage;
+      nextPage = (nextPage + 1) % buffer.size();
+      if (page->lastRead != readNumber) page->priority -= 10;
+      if (page->priority < priority)
       {
         page->lastRead = readNumber;
         return page;
@@ -138,36 +132,48 @@ public:
     }
   };
 
-
-  void read(int fileNum, int startRecord, int endRecord, int priority)
+  /*!
+    \brief Read a range of records from a file into the buffer
+    Returns the number of disk accesses needed to perform the read
+    \param fileNum      file number to read from
+    \param startRecord  first record to read
+    \param endRecord    last record to read
+    \param priority     priority value of this read operation
+    \param startSector  output parameter that holds the sector number corresponding to startRecord
+    \param endSector    output parameter that holds the sector number corresponding to endRecord
+  */
+  int read(int fileNum, int startRecord, int endRecord, int priority, int & startSector, int & endSector)
   {
     ++readNumber;
+    int oldFetchNumber = fetchNumber;
 
-    if (priority == EMPTY)
-      priority = DEFAULT_PRIORITY;
-    else
-      assert(MIN_PRIORITY <= priority && priority <= MAX_PRIORITY);
+    File & f = files[fileNum];
+    if (f.startingBlock < 0) THROW_STREAM("Invalid File number " << fileNum << endl);
+    startSector = f.startingBlock + (startRecord-1) * f.numBlocks / f.numRecords;
+    endSector = f.startingBlock + (endRecord-1) * f.numBlocks / f.numRecords;
 
-    int start = getSector(fileNum, startRecord);
-    int end = getSector(fileNum, endRecord + 1);
+    if (endSector - startSector > buffer.size()) THROW_STREAM("Buffer is not big "
+      "enough to hold records " << startRecord << "-" << endRecord << " from "
+      "file " << fileNum);
 
-    for(int r = start; r < end; ++r)
+    for(int r = startSector; r <= endSector; ++r)
     {
-      Bi page; 
-      pair<Si, bool> f = mapped.insert(Sp(r, page));
+      BufferIterator page; 
+      pair<SectorIterator, bool> f = mapped.insert(SectorPair(r, page));
       
-      if (!f.second) // no need to insert page is already in buffer
+      if (!f.second) // no need to insert page, it's already in buffer
         page = f.first->second;
       else
       {
-        f.first->second = page = getFreePage(r, priority);
-        //xxx: 
-        mapped.erase(page->si);
-        page->si = f.first;
+        fetchSector(r); // simulate disk read
+        page = f.first->second = getFreePage(r, priority); // find a spot in memory
+        if (page->sector >= 0) mapped.erase(page->sector); // erase old mapping
+        page->sector = r;
       }
       page->lastRead = readNumber;
       if (page->priority < priority) page->priority = priority;
     }
+    return fetchNumber - oldFetchNumber;
   }
 };
 
