@@ -278,11 +278,11 @@ Database::Database(char const * filename, System & system_)
 void Database::read(int fileNum, int startBlock, int endBlock, int priority)
 {
   assert(-1 <= priority && priority <= 99);
-  cout << "read " << setw(2) << fileNum
-    << " " << setw(6) << startBlock
-    << " " << setw(6) << endBlock
-    << " " << setw(3) << priority
-    << "\n";
+  cout << "read\t" << fileNum
+    << '\t' << startBlock
+    << '\t' << endBlock
+    << '\t' << priority
+    << '\n';
 };
 
 Access::Access(char const * filename, Database & database_)
