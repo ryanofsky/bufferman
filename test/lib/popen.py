@@ -77,7 +77,7 @@ def pipe_cmds(cmds):
       os.dup2(w, 1)
 
       # toss errors
-      os.dup2(null, 2)
+      #os.dup2(null, 2)
 
       # close these extra descriptors
       os.close(prev_r)
