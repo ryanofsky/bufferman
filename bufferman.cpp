@@ -1,3 +1,6 @@
+#pragma warning( push )
+#pragma warning( disable : 4786 )
+
 /*! \file
     \brief holds main() function
 */
@@ -6,30 +9,66 @@
 
 #include "database.hpp"
 #include "general.hpp"
-#include "random.hpp"
-#include "time.h"
+#include "bufferman.hpp"
+#include "tokenizer.hpp"
 
 #include <iostream>
-using std::cerr;
+using std::cin;
+using std::cout;
 using std::endl;
 
 int main(int argc, char * argv[])
 {
-  if (argc > 2)
+  if (argc > 1)
   {
-    cerr << "Usage: " << argv[0] << " [seed]" << endl;
+    cerr << "Usage: " << argv[0] << endl;
     return 0;
   }
 
-  int seed = argc < 2 ? time(0) : atoi(argv[1]);
-  if (seed == 0) seed = 1; // 0 causes crash for some reason
+  char * filename = "stdin";
+
   try
   {
-    RandomSeed(seed);
     System system(PATH "system.dsc");
     Database database(PATH "database.dsc", system);
-    Access access(PATH "access.dsc", database);
-    access.simulateOperations(system);
+    BufferManager bm(system, database);
+    Tokenizer t(cin);
+    while(t.next())
+    {
+      if (t.token != "read")
+        throw ParseException(filename, t, "Expecting 'read'", __FILE__, __LINE__);
+      
+      int fileNum, startRecord, endRecord, priority;
+
+      bool eof = t.next();
+      fileNum = t.getInt();
+      if (eof) throw ParseException(filename, t, "Expecting file number.", __FILE__, __LINE__);
+
+      eof = t.next();
+      startRecord = t.getInt();
+      if (eof || startRecord <= 0) 
+        throw ParseException(filename, t, "Expecting positive starting record number", __FILE__, __LINE__);
+
+      eof = t.next();
+      endRecord = t.getInt();
+      if (eof || endRecord < startRecord)
+        throw ParseException(filename, t, "Expecting ending record after the starting record", __FILE__, __LINE__);
+
+      eof = t.next();
+      priority = t.getInt();
+      if (eof || priority < -1 || priority > 99)
+        throw ParseException(filename, t, "Expecting priority in [-1,99]", __FILE__, __LINE__);
+
+      try
+      {
+        bm.read(fileNum, startRecord, endRecord, priority);
+      }
+      catch(...)
+      {
+        cerr << "Error simulating read at " << filename << ":" << t.lineNo << endl;
+        throw;
+      }
+    };
     return 0;
   }
   catch(Exception e)
@@ -110,3 +149,5 @@ database.cpp (where some other calculations are done). The rest of it is parsing
 */
 
 // \subsection step1 Step 1: Opening the box
+
+#pragma warning( pop )

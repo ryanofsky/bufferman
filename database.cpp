@@ -116,34 +116,23 @@ void Index::calc(Database & d)
     assert(false);
 }
 
-//! Specialized exception class for holding information about parse errors
-class ParseException : public Exception
-{
-public:
-  string inputFile;
-  int inputLine;
-  string inputToken;
-  string description;
 
-  ParseException(string inputFile_, Tokenizer & t, string description_,
+ParseException::ParseException(string inputFile_, Tokenizer & t, string description_,
     char const * file_, int line_)
-  : inputFile(inputFile_), inputLine(t.lineNo), inputToken(t.token),
-    description(description_), Exception(file_, line_)
-  {
-    ostringstream s;
-    s << "Error parsing " << inputFile_ << " near ";
+: inputFile(inputFile_), inputLine(t.lineNo), inputToken(t.token),
+  description(description_), Exception(file_, line_)
+{
+  ostringstream s;
+  s << "Error parsing " << inputFile_ << " near ";
 
-    if (t.token.length() == 0 && t.in.peek() == EOF)
-      s << "EOF";
-    else
-      s << "'" << t.token << "'";
-
-    s << " at line " << inputLine << endl << description << endl;
-    message = s.str();
-  }
-
-  virtual char const * className() const { return "InputException"; };
+  if (t.token.length() == 0 && t.in.peek() == EOF)
+    s << "EOF";
+  else
+    s << "'" << t.token << "'";
+  s << " at line " << inputLine << endl << description << endl;
+  message = s.str();
 };
+
 
 System::System(char const * filename)
 {

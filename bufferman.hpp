@@ -1,6 +1,14 @@
 #ifndef bufferman_hpp
 #define bufferman_hpp
 
+#include <map>
+#include <vector>
+#include <cassert>
+
+using std::vector;
+using std::map;
+using std::pair;
+
 struct File
 {
   //! starts on this sector
@@ -11,54 +19,21 @@ struct File
 
   //! number of blocks in the file
   int numBlocks;
+
+  File() : startingBlock(-1), numRecords(0), numBlocks(0) {}
 };
 
 class BufferManager
 {
-public:
-  System & system;
-  Database & database;
+private:
 
-  enum { EMPTY = -1, MIN_PRIORITY = 0, MAX_PRIORITY = 99, 
-    DEFAULT_PRIORITY = 10 };
-    
-  BufferManager()
-  {
-    buffer.resize(s.numBlocks, EMPTYPAGE);
-    filledSectors = 0;
-    {
-    for(int i = 0; i < database.relations.size(); ++i)
-    {
-      Relation & r = database.relations[i];
-      File f(filledSectors, r.numRecords, r.relationSize);
-      filledSectors += r.relationSize;
-    }
-    }
-
-    {
-    for(int i = 0; i < database.indices.size(); ++i)
-    {
-      Index & in = database.indices[i];
-      File f(filledSectors, 1, 1);
-      files[i.fileNum] = in;
-    }
-    }
-    assert(buffer.size() > 0);
-  }
-
-  //! maps a file
-  map<int, int> files;
-
-  //vector of prorities
-  vector<int> buffer;
-
+  // define some types used internally
   struct Page;
-
   typedef vector<Page> Buffer;
   typedef Buffer::iterator Bi;
-  typedef hash_map<int, Bi> SectorMap;
+  typedef map<int, Bi> SectorMap;
   typedef SectorMap::iterator Si;
-
+  typedef SectorMap::value_type Sp;
   struct Page
   {
     Si si;
@@ -66,12 +41,45 @@ public:
     int lastRead;
   };
 
-  SectorMap mapped;
+public:
+
+  //! last sector read
+  int lastPos;
+
+  //! how many reads so far
+  int readNumber;
+
+  //! total time (in milliseconds)
+  int time;
+
+  //! vector of pages
+  Buffer buffer;
+
+  //! map of sector addresses that are currently loaded in the buffer
+  SectorMap mapped;  
+
+  System & system;
+  Database & database;
+
+  //! list of files indexed by file number
+  map<int, File> files;
+
+  BufferManager(System & system_, Database & database_)
+    : system(system_), database(database_), lastPos(-1), readNumber(0), time(0)
+  {
+  
+  }
+
+  enum { EMPTY = -1, MIN_PRIORITY = 0, MAX_PRIORITY = 99, 
+    DEFAULT_PRIORITY = 10 };
 
   //! map a file number and offset to a disk sector 
   int getSector(int fileNum, int offset)
   {
     File & f = files[fileNum];
+    if (f.startingBlock < 0)
+      THROW_STREAM("Invalid File number " << fileNum << endl);
+
     return files[fileNum].startingBlock + (offset - 1)
       * f.numBlocks / f.numRecords;
   }
@@ -86,9 +94,9 @@ public:
     if (sector == lastSector)
     {
       // xxx: what is rotational latency (why isn't it just a part of seekTime)
-      time += system.rotationLatency + seekTime;
+      time += system.rotationalLatency + system.seekTime;
     } 
-    time += system.tranferTime;
+    time += system.transferTime;
     lastSector = sector; 
   }
 
@@ -113,22 +121,16 @@ public:
     page->priority -= 10;
   }
 
-  int lastPos = -1;
-  lastSkipped = lastPos;
+
   Bi getFreePage(int sector, int priority)
   {
-    int lastSkipped = priorities.begin()->first;
     for(;;)
     {
       ++lastPos;
       lastPos = lastPos % buffer.size();
 
-      if (lastPos == lastSkipped)
-        THROW_STREAM("Not enough room in the buffer to store sector " 
-          << sector);
-
       Bi page = buffer.begin() + lastPos;
-      if (usePage(priority, page))
+      if (usePage(page,priority))
       {
         page->lastRead = readNumber;
         return page;
@@ -136,7 +138,7 @@ public:
     }
   };
 
-  int readNumber = 0;
+
   void read(int fileNum, int startRecord, int endRecord, int priority)
   {
     ++readNumber;
@@ -152,14 +154,15 @@ public:
     for(int r = start; r < end; ++r)
     {
       Bi page; 
-      pair<Si, bool> f = mapped.insert(r, page);
+      pair<Si, bool> f = mapped.insert(Sp(r, page));
       
       if (!f.second) // no need to insert page is already in buffer
         page = f.first->second;
       else
       {
         f.first->second = page = getFreePage(r, priority);
-        if (page->si) mapped.erase(page->si);
+        //xxx: 
+        mapped.erase(page->si);
         page->si = f.first;
       }
       page->lastRead = readNumber;

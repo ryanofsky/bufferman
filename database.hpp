@@ -5,6 +5,7 @@
     \brief Classes that hold parameters describing tables, indices, and databases and load this information from files.
 */
 
+#include "general.hpp"
 #include "operations.hpp"
 
 #include<vector>
@@ -168,6 +169,24 @@ public:
   void simulateOperations(System & system);
 
   ~Access();
+};
+
+// forward declaration
+class Tokenizer;
+
+//! Specialized exception class for holding information about parse errors
+class ParseException : public Exception
+{
+public:
+  string inputFile;
+  int inputLine;
+  string inputToken;
+  string description;
+
+  ParseException(string inputFile_, Tokenizer & t, string description_,
+    char const * file_, int line_);
+
+  virtual char const * className() const { return "ParseException"; };
 };
 
 #endif
