@@ -54,7 +54,7 @@ struct Relation
   void calc(Database & d);
 
   //! amount of blocks used by the relation (calculated)
-  int relationSize;
+  int blockSize;
 
   //! Return the number of records that can fit in a certain fraction of the buffer
   int recordsInBuf(System & s, double bufferFrac, int reserve = 0);
@@ -94,7 +94,7 @@ struct Index
   void calc(Database & database);
 
   //! How many blocks the index takes up on disk
-  int indexSize;
+  int blockSize;
 
   /*! \brief number of keys in the index
       For a primary b+tree it is number of blocks in the relation,

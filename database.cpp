@@ -32,7 +32,7 @@ void Relation::calc(Database & d)
   int packedRelationSize = divCeil(numRecords,
     s.blockSize / recordSize);
 
-  relationSize = (int)rint(packedRelationSize / occupancy);
+  blockSize = (int)rint(packedRelationSize / occupancy);
 }
 
 int Relation::recordsInBuf(System & s, double bufferFrac, int reserve)
@@ -54,7 +54,7 @@ void Index::calc(Database & d)
 
   if (conceptualType == Index::PRIMARY && physicalType == Index::BPLUS)
   {
-    numKeys = d.relations[relationNum].relationSize;
+    numKeys = d.relations[relationNum].blockSize;
   }
   else
   {
@@ -75,7 +75,7 @@ void Index::calc(Database & d)
     // amount of space that the index would use if its occupancy were 1.0
     int packedIndexSize = divCeil(numKeys, keysPerNode);
 
-    indexSize = (int)rint((double)packedIndexSize / occupancy);
+    blockSize = (int)rint((double)packedIndexSize / occupancy);
   }
   else if (physicalType == Index::BPLUS)
   {
@@ -98,13 +98,13 @@ void Index::calc(Database & d)
     int numChildren = (int)rint((double)divCeil(numKeys, keysPerLeafNode) / occupancy);
       
     treeLevels.push_back(numChildren);
-    indexSize = numChildren;
+    blockSize = numChildren;
 
     do
     {
       numChildren = (int)ceil((double)numChildren / (double) (keysPerNode+1) / occupancy);
       treeLevels.push_back(numChildren);
-      indexSize += numChildren;   
+      blockSize += numChildren;   
     }
     while (numChildren > 1);
 
@@ -204,6 +204,9 @@ Database::Database(char const * filename, System & system_)
       if (r.recordSize <= 0 || eof)
         throw ParseException(filename, t, "Expecting relation record size > 0", __FILE__, __LINE__);
 
+      if (r.recordSize > system.blockSize)
+        throw ParseException(filename, t, "Expecting relation record size < block size", __FILE__, __LINE__);
+
       eof = !t.next();
       r.numRecords = t.getInt();
       if (r.numRecords <= 0 || eof)
@@ -215,7 +218,6 @@ Database::Database(char const * filename, System & system_)
         throw ParseException(filename, t, "Expecting occupied fraction to be in (0,1]", __FILE__, __LINE__);
 
       r.calc(*this);
-      relations.push_back(r);
     }
     else if (t.token == "index")
     {
