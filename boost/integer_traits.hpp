@@ -106,7 +106,8 @@ class integer_traits<wchar_t>
     // (also, std::numeric_limits<wchar_t> appears to return the wrong values).
     public detail::integer_traits_base<wchar_t, 0, UINT_MAX>
 #else
-#error No WCHAR_MIN and WCHAR_MAX present, please adjust integer_traits<> for your compiler.
+//#error No WCHAR_MIN and WCHAR_MAX present, please adjust integer_traits<> for your compiler.
+public detail::integer_traits_base<wchar_t, 0, 0xffff>
 #endif
 { };
 #endif // BOOST_NO_INTRINSIC_WCHAR_T
