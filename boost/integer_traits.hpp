@@ -107,6 +107,8 @@ class integer_traits<wchar_t>
     public detail::integer_traits_base<wchar_t, 0, UINT_MAX>
 #else
 //#error No WCHAR_MIN and WCHAR_MAX present, please adjust integer_traits<> for your compiler.
+// made the following possibly incorrect addition for cunix.
+// doesn't matter though because we never use wchar_t
 public detail::integer_traits_base<wchar_t, 0, 0xffff>
 #endif
 { };
