@@ -59,11 +59,9 @@ access_desc2 = """1000
 .05 block 1 2 0.5 0.5
 .05 indexloop 1 3 2"""
 
-access_desc3 = """1000
-.8 scan 1 0.5
-.1 lookup 3
-.05 block 1 2 0.5 0.5
-.05 indexloop 1 3 2"""
+access_desc3 = """50
+.5 block 1 2 0.5 0.5
+.5 indexloop 1 3 2"""
 
 granularity = 0;
 
@@ -71,7 +69,7 @@ f = open("buffertune.csv", "wt")
 
 f.write("Buffer Size,Pattern 1,Pattern 2,Pattern 3\n")
 
-for buffersize in range(64,385,16):
+for buffersize in range(16,161,16):
   sd = system_desc % {'buffersize': buffersize}
   time1 = test.run([sd, database_desc, access_desc1], 1, granularity, None)
   time2 = test.run([sd, database_desc, access_desc2], 1, granularity, None)
