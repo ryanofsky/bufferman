@@ -34,7 +34,8 @@ struct Lookup : public Operation
   //! which index to search (index into Database::indices)
   int indexNum; 
 
-  void operator()(Database & d);
+  void operator()(Database & d) { (*this)(d,1); }
+  void operator()(Database & d, int numMatches);
 };
 
 
@@ -58,17 +59,13 @@ struct BlockJoin : public Operation
 
 
 //! Performs nested-loop join of two tables with an index on the inner table
-struct IndexLoop : public Operation
+struct IndexLoop : public Lookup
 {
   //! outer relation number (index into Database::relations)
   int relationNum;
   
-  //! index number for inner relation (index into Database::indices)
-  int indexNum; 
-  
   //! average number of matches found in the inner relation for each record in outer relation
   double matches; 
-
 
   void operator()(Database & d);
 };
