@@ -4,6 +4,7 @@
 #include <map>
 #include <vector>
 #include <cassert>
+#include <hash_map>
 
 using namespace std;
 
@@ -45,7 +46,7 @@ struct BufferPage
 
 typedef vector<BufferPage> Buffer;
 typedef Buffer::iterator BufferIterator;
-typedef map<int, BufferIterator> SectorMap;
+typedef hash_map<int, BufferIterator> SectorMap;
 typedef SectorMap::iterator SectorIterator;
 typedef SectorMap::value_type SectorPair;
 
@@ -89,6 +90,7 @@ public:
     lastSector(-1), time(0), nextPage(0)
   {
     buffer.resize(system.numBlocks);
+    mapped.resize(system.numBlocks*2);
     int lastBlock(0);
     
     for(int a = 0; a < database.relations.size(); ++a)
