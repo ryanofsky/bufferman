@@ -46,20 +46,20 @@ b+tree    #physical index type
 -1        #sentinel value
 """
 
-access_desc1 = """100
+access_desc1 = """1000
 .1 scan 4 0.5
 .8 lookup 5
 .05 block 1 2 0.5 0.5
 .05 indexloop 1 3 2
 """
 
-access_desc2 = """100
+access_desc2 = """1000
 .1 scan 1 0.5
 .8 lookup 3
 .05 block 1 2 0.5 0.5
 .05 indexloop 1 3 2"""
 
-access_desc3 = """100
+access_desc3 = """1000
 .8 scan 1 0.5
 .1 lookup 3
 .05 block 1 2 0.5 0.5
@@ -67,23 +67,15 @@ access_desc3 = """100
 
 granularity = 0;
 
-f1 = open("buffertune1.csv", "wt")
-f2 = open("buffertune2.csv", "wt")
-f3 = open("buffertune3.csv", "wt")
+f = open("buffertune.csv", "wt")
 
-f1.write("Buffer Size,time\n")
-f2.write("Buffer Size,time\n")
-f3.write("Buffer Size,time\n")
+f.write("Buffer Size,Pattern 1,Pattern 2,Pattern 3\n")
 
-for buffersize in range(64,513,64):
+for buffersize in range(64,385,16):
   sd = system_desc % {'buffersize': buffersize}
-  time1 = test.run([sd, database_desc, access_desc1], 4, granularity, None)
-  time2 = test.run([sd, database_desc, access_desc2], 4, granularity, None)
-  time3 = test.run([sd, database_desc, access_desc3], 4, granularity, None)
-  f1.write("%i,%f\n" % (buffersize,time1))
-  f2.write("%i,%f\n" % (buffersize,time2))
-  f3.write("%i,%f\n" % (buffersize,time3))
-  
-f1.close()
-f2.close()
-f3.close()
+  time1 = test.run([sd, database_desc, access_desc1], 1, granularity, None)
+  time2 = test.run([sd, database_desc, access_desc2], 1, granularity, None)
+  time3 = test.run([sd, database_desc, access_desc3], 1, granularity, None)
+  f.write("%i,%f,%f,%f\n" % (buffersize,time1,time2,time3))
+
+f.close()
