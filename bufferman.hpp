@@ -110,7 +110,7 @@ public:
   void fetchSector(int sector)
   {
     ++fetchNumber;
-    if (sector == lastSector + 1)
+    if (sector != lastSector + 1)
       time += system.rotationalLatency + system.seekTime;
     time += system.transferTime;
     lastSector = sector; 
