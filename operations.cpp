@@ -50,7 +50,7 @@ void Lookup::operator()(Database & d, int numMatches)
   if (i.physicalType == Index::HASH)
   {
     // read a random block in the hash table
-    int whichBlock = RandomInt(i.indexSize);
+    int whichBlock = RandomInt(i.blockSize);
     d.read(i.fileNum, whichBlock+1, whichBlock+1);
   }
   else if (i.physicalType == Index::BPLUS)
@@ -88,7 +88,7 @@ void Lookup::operator()(Database & d, int numMatches)
     }
     
     // position of first node on the current depth
-    int startingNode = i.indexSize - i.treeLevels[currentDepth];
+    int startingNode = i.blockSize - i.treeLevels[currentDepth];
 
     reads.push_back(startingNode + currentNode);
 
@@ -164,7 +164,7 @@ void BlockJoin::operator()(Database & d)
       for (int o = orec; o <= olast; ++o)
       {
         // actually read outer record ...
-        d.read(ro.fileNum, o, o);
+        d.read(ro.fileNum, o, o, 90);
 
         // and look for matches in inner records
         for (int i = 1; i <= ilast; ++i)
