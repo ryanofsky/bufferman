@@ -167,9 +167,9 @@ void BlockJoin::operator()(Database & d)
         d.read(ro.fileNum, o, o, 90);
 
         // and look for matches in inner records
-        for (int i = 1; i <= ilast; ++i)
+        for (int i = irec; i <= ilast; ++i)
         {
-          d.read(ri.fileNum, i, i);
+          d.read(ri.fileNum, i, i, 10);
         }
       }
     }
@@ -180,15 +180,19 @@ void IndexLoop::operator()(Database & d)
 {
   System & s = d.system;
   Relation & r = d.relations[relationNum];
+  Index & i = d.indices[indexNum];
 
-  // leave two pages for index and retrieval from relation
-  int buffer = r.recordsInBuf(s, 1.0, 2);
+  // leave pages for index and retrieval from relation
+  int buffer = r.recordsInBuf(s, 1.0, 3 + i.treeLevels.size() + (int)ceil(matches));
 
   for(int rec = 1; rec <= r.numRecords; rec += buffer)
   {
     int lastRec = min(rec+buffer-1, r.numRecords);
-    d.read(r.fileNum, rec, lastRec, -1);
-    for (int r = rec; r <= lastRec; ++r)
+    d.read(r.fileNum, rec, lastRec, 99);
+    for (int a = rec; a <= lastRec; ++a)
+    {
+      d.read(r.fileNum, a, a, 99);
       Lookup::operator()(d, RandomConsecutive(matches));
+    }
   }
 };
