@@ -19,7 +19,7 @@ general.o: general.cpp general.hpp
 accessgen.o: accessgen.cpp database.hpp operations.hpp general.hpp
 	g++ $(COMPILER_OPTIONS) -o $@ $<
 
-bufferman.o: bufferman.cpp database.hpp operations.hpp general.hpp
+bufferman.o: bufferman.cpp database.hpp bufferman.hpp general.hpp
 	g++ $(COMPILER_OPTIONS) -o $@ $<
 
 operations.o: operations.cpp operations.hpp database.hpp general.hpp random.hpp
